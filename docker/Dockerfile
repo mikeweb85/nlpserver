@@ -1,33 +1,34 @@
-# Use the official image as a parent image.
-FROM python:3.8.5-slim-buster
+FROM ubuntu:jammy
 
+ARG BRANCH=master
+
+USER root
+
+WORKDIR /opt
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y git && \
-    apt-get install -y supervisor
+    apt-get install -y --no-install-recommends openssl ca-certificates iputils-ping pkg-config git libicu-dev python3-dev python3-pip polyglot python3-icu make gcc g++ supervisor && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3 10 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 10 && \
+    git clone https://github.com/aboSamoor/pycld2.git && \
+    git clone https://github.com/mikeweb85/nlpserver.git
 
-# Set the working directory.
-WORKDIR /usr/src
-RUN git clone https://github.com/web64/nlpserver.git
-WORKDIR /usr/src/nlpserver
+WORKDIR /opt/pycld2
+RUN make clean && \
+    make build
 
-# Install dependencies
-RUN apt-get -y install pkg-config && \
- 	apt-get -y install -y python-numpy libicu-dev && \
- 	apt-get -y install -y python3-pip && \
- 	python3 -m pip install -r requirements.txt
+WORKDIR /opt/nlpserver
+RUN git fetch origin ${BRANCH} && \
+    git checkout ${BRANCH} && \
+    pip install -r requirements.txt && \
+    python -m polyglot download LANG:en && \
+    pip install -U spacy && \
+    python -m spacy download en_core_web_sm && \
+    python -m spacy download xx_ent_wiki_sm
 
-# Download language models
-RUN polyglot download LANG:en
-
-RUN python3 -m spacy download en && \
-	python3 -m spacy download xx
-
-# Set supervisor config
 COPY nlpserver.conf /etc/supervisor/conf.d
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
- 
+
 EXPOSE 6400
